@@ -62,6 +62,6 @@ type testLimiter struct {
 	err     error
 }
 
-func (l *testLimiter) Limit(ctx context.Context, key string) (bool, error) {
+func (l *testLimiter) Limit(_ context.Context, _ string) (bool, error) {
 	return l.limited, l.err
 }
