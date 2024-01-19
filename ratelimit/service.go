@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/udugong/limiter"
-
 	"github.com/udugong/go-comm"
 )
 
@@ -17,10 +15,10 @@ type Service[T any] struct {
 	limitKey string
 
 	// 限流器
-	limiter limiter.Limiter
+	limiter Limiter
 }
 
-func NewService[T any](svc comm.Sender[T], limitKey string, limiter limiter.Limiter) *Service[T] {
+func NewService[T any](svc comm.Sender[T], limitKey string, limiter Limiter) *Service[T] {
 	return &Service[T]{
 		svc:      svc,
 		limitKey: limitKey,
