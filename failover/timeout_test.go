@@ -45,7 +45,7 @@ func TestTimeoutService_Send(t *testing.T) {
 		{
 			name:         "svc1_timeout_and_reset_idx",
 			localSvc1Err: context.DeadlineExceeded,
-			fn:           withResetIdxFunc,
+			fn:           withSetIdxFunc,
 			interval:     150 * time.Millisecond,
 			wantIdx:      0,
 		},
@@ -59,7 +59,7 @@ func TestTimeoutService_Send(t *testing.T) {
 				localSvc2,
 			}
 			svc := NewTimeoutService[[]string](
-				svcs, 1, WithResetIdxFunc[[]string](tt.fn),
+				svcs, 1, WithSetIdxFunc[[]string](tt.fn),
 			)
 			localSvc1.err = tt.localSvc1Err
 			localSvc2.err = tt.localSvc2Err
@@ -72,15 +72,63 @@ func TestTimeoutService_Send(t *testing.T) {
 	}
 }
 
-type testService[T any] struct {
-	err error
+func TestTimeoutService_GetCurrentServiceIndex(t *testing.T) {
+	svc1 := &testService[int]{}
+	svc2 := &testService[int]{}
+	svc := NewTimeoutService[int]([]comm.Sender[int]{svc1, svc2}, 3)
+	type testCase[T any] struct {
+		name string
+		want int32
+	}
+	tests := []testCase[int]{
+		{
+			name: "normal",
+			want: 1,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc.idx = tt.want
+			assert.Equal(t, tt.want, svc.GetCurrentServiceIndex())
+		})
+	}
 }
 
-func (svc *testService[T]) Send(_ context.Context, _ string, _ T, _ ...string) error {
-	return svc.err
+func TestTimeoutService_SetCurrentServiceIndex(t *testing.T) {
+	svc1 := &testService[int]{}
+	svc2 := &testService[int]{}
+	svc := NewTimeoutService[int]([]comm.Sender[int]{svc1, svc2}, 3)
+	type testCase[T any] struct {
+		name string
+		idx  int32
+		want int32
+	}
+	tests := []testCase[int]{
+		{
+			name: "normal",
+			idx:  1,
+			want: 1,
+		},
+		{
+			name: "index_is_less_than_range",
+			idx:  -1,
+			want: 0,
+		},
+		{
+			name: "index_greater_than_range",
+			idx:  2,
+			want: 0,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc.SetCurrentServiceIndex(tt.idx)
+			assert.Equal(t, tt.want, svc.idx)
+		})
+	}
 }
 
-func withResetIdxFunc(ctx context.Context, old *int32) {
+func withSetIdxFunc(ctx context.Context, old *int32) {
 	timer := time.NewTimer(100 * time.Millisecond)
 	defer timer.Stop()
 	select {
