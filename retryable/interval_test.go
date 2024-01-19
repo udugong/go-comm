@@ -4,17 +4,22 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
 
-func TestService_Send(t *testing.T) {
+func TestIntervalService_Send(t *testing.T) {
 	retryMax := 3
 	timeoutCtx, cancel := context.WithTimeout(context.Background(), 0)
 	defer cancel()
 	testSvc := &testService[int]{}
-	svc := NewService[int](testSvc, retryMax)
+	svc := NewIntervalService[int](testSvc, retryMax,
+		func() time.Duration {
+			return time.Duration(100+rand.Intn(50)) * time.Millisecond
+		})
 	type testCase[T any] struct {
 		name        string
 		ctx         context.Context
@@ -46,12 +51,4 @@ func TestService_Send(t *testing.T) {
 			assert.Equal(t, tt.wantErr, err)
 		})
 	}
-}
-
-type testService[T any] struct {
-	err error
-}
-
-func (svc *testService[T]) Send(_ context.Context, _ string, _ T, _ ...string) error {
-	return svc.err
 }
