@@ -21,11 +21,12 @@ type TimeoutService[T any] struct {
 	// 连续超时次数阈值
 	threshold int32
 
-	// 重置索引函数
-	resetIdxFunc func(ctx context.Context, old *int32)
+	// 设置索引函数
+	// 切换了服务后触发
+	setIdxFunc func(ctx context.Context, old *int32)
 }
 
-func NewTimeoutService[T any](svcs []comm.Sender[T], threshold int32, opts ...Option[T]) *TimeoutService[T] {
+func NewTimeoutService[T any](svcs []comm.Sender[T], threshold int32, opts ...TimeoutOption[T]) *TimeoutService[T] {
 	res := &TimeoutService[T]{
 		svcs:      svcs,
 		threshold: threshold,
@@ -36,19 +37,19 @@ func NewTimeoutService[T any](svcs []comm.Sender[T], threshold int32, opts ...Op
 	return res
 }
 
-type Option[T any] interface {
+type TimeoutOption[T any] interface {
 	apply(*TimeoutService[T])
 }
 
-type optionFunc[T any] func(*TimeoutService[T])
+type timeoutOptionFunc[T any] func(*TimeoutService[T])
 
-func (f optionFunc[T]) apply(m *TimeoutService[T]) {
-	f(m)
+func (f timeoutOptionFunc[T]) apply(svc *TimeoutService[T]) {
+	f(svc)
 }
 
-func WithResetIdxFunc[T any](fn func(context.Context, *int32)) Option[T] {
-	return optionFunc[T](func(t *TimeoutService[T]) {
-		t.resetIdxFunc = fn
+func WithSetIdxFunc[T any](fn func(context.Context, *int32)) TimeoutOption[T] {
+	return timeoutOptionFunc[T](func(t *TimeoutService[T]) {
+		t.setIdxFunc = fn
 	})
 }
 
@@ -62,8 +63,8 @@ func (t *TimeoutService[T]) Send(ctx context.Context, tpl string, args T, to ...
 			atomic.StoreInt32(&t.cnt, 0)
 		}
 		idx = newIdx
-		if t.resetIdxFunc != nil {
-			go t.resetIdxFunc(context.Background(), &t.idx)
+		if t.setIdxFunc != nil {
+			go t.setIdxFunc(context.Background(), &t.idx)
 		}
 	}
 	svc := t.svcs[idx]
@@ -78,4 +79,18 @@ func (t *TimeoutService[T]) Send(ctx context.Context, tpl string, args T, to ...
 	default:
 	}
 	return err
+}
+
+// GetCurrentServiceIndex 获取当前使用服务的索引
+func (t *TimeoutService[T]) GetCurrentServiceIndex() int32 {
+	return atomic.LoadInt32(&t.idx)
+}
+
+// SetCurrentServiceIndex 根据索引设置使用的服务
+// 如果 idx < 0 或者 idx 超过 svcs 的索引范围将统一把 idx 设为 0
+func (t *TimeoutService[T]) SetCurrentServiceIndex(idx int32) {
+	if idx < 0 || int(idx) >= len(t.svcs) {
+		idx = 0
+	}
+	atomic.StoreInt32(&t.idx, idx)
 }

@@ -60,3 +60,67 @@ func TestService_Send(t *testing.T) {
 		})
 	}
 }
+
+func TestService_GetCurrentServiceIndex(t *testing.T) {
+	svc1 := &testService[int]{}
+	svc2 := &testService[int]{}
+	svc := NewService[int]([]comm.Sender[int]{svc1, svc2})
+	type testCase[T any] struct {
+		name string
+		want int32
+	}
+	tests := []testCase[int]{
+		{
+			name: "normal",
+			want: 1,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc.idx = tt.want
+			assert.Equal(t, tt.want, svc.GetCurrentServiceIndex())
+		})
+	}
+}
+
+func TestService_SetCurrentServiceIndex(t *testing.T) {
+	svc1 := &testService[int]{}
+	svc2 := &testService[int]{}
+	svc := NewService[int]([]comm.Sender[int]{svc1, svc2})
+	type testCase[T any] struct {
+		name string
+		idx  int32
+		want int32
+	}
+	tests := []testCase[int]{
+		{
+			name: "normal",
+			idx:  1,
+			want: 1,
+		},
+		{
+			name: "index_is_less_than_range",
+			idx:  -1,
+			want: 0,
+		},
+		{
+			name: "index_greater_than_range",
+			idx:  2,
+			want: 0,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc.SetCurrentServiceIndex(tt.idx)
+			assert.Equal(t, tt.want, svc.idx)
+		})
+	}
+}
+
+type testService[T any] struct {
+	err error
+}
+
+func (svc *testService[T]) Send(_ context.Context, _ string, _ T, _ ...string) error {
+	return svc.err
+}

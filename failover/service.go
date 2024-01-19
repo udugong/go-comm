@@ -42,3 +42,17 @@ func (s *Service[T]) Send(ctx context.Context, tpl string, args T, to ...string)
 	}
 	return ErrAllServiceFailed
 }
+
+// GetCurrentServiceIndex 获取当前使用服务的索引
+func (s *Service[T]) GetCurrentServiceIndex() int32 {
+	return atomic.LoadInt32(&s.idx)
+}
+
+// SetCurrentServiceIndex 根据索引设置使用的服务
+// 如果 idx < 0 或者 idx 超过 svcs 的索引范围将统一把 idx 设为 0
+func (s *Service[T]) SetCurrentServiceIndex(idx int32) {
+	if idx < 0 || int(idx) >= len(s.svcs) {
+		idx = 0
+	}
+	atomic.StoreInt32(&s.idx, idx)
+}
