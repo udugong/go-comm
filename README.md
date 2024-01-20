@@ -43,8 +43,8 @@ go versions
 
 导入`"github.com/udugong/go-comm/retryable"`
 
-- [直接重试](##直接重试)
-- [间隔重试](##间隔重试)
+- [直接重试](#直接重试)
+- [间隔重试](#间隔重试)
 
 
 
@@ -62,12 +62,12 @@ import (
 type Args struct {
 	From    string
 	Subject string
-    Body    string
+	Body    string
 	IsHTML  bool
 }
 
 func main() {
-    // 表示创建一个最大发送3次的发送服务
+	// 表示创建一个最大发送3次的发送服务
 	svc := retryable.NewService[Args](&testService[Args]{}, 3)
 	svc.Send(context.Background(), "", Args{}, "foo@example.com")
 }
@@ -102,11 +102,64 @@ retryable.NewIntervalService[int](&testService[Args]{}, 3,
 
 # `ratelimit` package
 
-该`ratelimit`包提供了限流策略。
+该`ratelimit`包提供了限流策略。但是需要实现 [Limiter](https://github.com/udugong/go-comm/blob/main/ratelimit/limiter.go#L5) 接口在初始化时注入。
+在 [limiter](https://github.com/udugong/limiter) 仓库中提供了 Limiter 接口的实现。
+
+导入`"github.com/udugong/go-comm/ratelimit"`
+
+
+```go
+package main
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/redis/go-redis/v9"
+	"github.com/udugong/go-comm/ratelimit"
+	ratelimiter "github.com/udugong/limiter/ratelimit"
+)
+
+func main() {
+	limiter := ratelimiter.NewRedisSlidingWindowLimiter(&redis.Client{}, time.Second, 1)
+	sender := ratelimit.NewService[Args](&testService[Args]{}, "email", limiter)
+
+	// 如果限流则会返回 ratelimit.ErrLimited 错误
+	err := sender.Send(context.Background(), "", Args{}, "")
+	if err != nil {
+		if errors.Is(err, ratelimit.ErrLimited) {
+			fmt.Println("限流了...")
+			return
+		}
+		fmt.Println(err)
+	}
+}
+
+type Args struct {
+	From    string
+	Subject string
+	Body    string
+	IsHTML  bool
+}
+
+// testService 模拟实现 Sender[T any] 接口
+type testService[T any] struct {
+	err error
+}
+
+func (svc *testService[T]) Send(_ context.Context, _ string, _ T, _ ...string) error {
+	return svc.err
+}
+
+```
 
 
 
 # `failover` package
 
 该`failover`包提供了故障转移策略。
+
+导入`"github.com/udugong/go-comm/failover"`
 
