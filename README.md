@@ -159,7 +159,126 @@ func (svc *testService[T]) Send(_ context.Context, _ string, _ T, _ ...string) e
 
 # `failover` package
 
-该`failover`包提供了故障转移策略。
+该`failover`包提供了故障转移策略。并提供了查看与设置当前使用服务的方法。
 
 导入`"github.com/udugong/go-comm/failover"`
 
+- [出错故障转移](#出错故障转移)
+- [连续超时故障转移](#连续超时故障转移)
+
+
+
+## 出错故障转移
+
+当出现 error 时会切换到下一个发送服务，直到所有的发送服务都失败则会返回 `failover.ErrAllServiceFailed` 错误，
+若遇到 `context.DeadlineExceeded` 超时与 `context.Canceled` 取消则直接返回 error。 每次调用 Send 方法时会从上一个正常发送的服务开始调用。
+
+```go
+package main
+
+import (
+	"context"
+	"errors"
+	"fmt"
+
+	"github.com/udugong/go-comm"
+	"github.com/udugong/go-comm/failover"
+)
+
+func main() {
+	sender := failover.NewService[Args]([]comm.Sender[Args]{&testService[Args]{}})
+
+	// 如果所有服务商都失败了则会返回 failover.ErrAllServiceFailed 错误
+	err := sender.Send(context.Background(), "", Args{}, "")
+	if err != nil {
+		switch {
+		case errors.Is(err, failover.ErrAllServiceFailed):
+			fmt.Println("全部服务商都失败了...")
+		case errors.Is(err, context.DeadlineExceeded):
+			fmt.Println("超时了...")
+		case errors.Is(err, context.Canceled):
+			fmt.Println("取消了...")
+		default:
+			// 别的错误
+			fmt.Println(err)
+		}
+		return
+	}
+}
+
+type Args struct {
+	From    string
+	Subject string
+	Body    string
+	IsHTML  bool
+}
+
+// testService 模拟实现 Sender[T any] 接口
+type testService[T any] struct {
+	err error
+}
+
+func (svc *testService[T]) Send(_ context.Context, _ string, _ T, _ ...string) error {
+	return svc.err
+}
+
+```
+
+
+
+## 连续超时故障转移
+
+当连续出现 `context.DeadlineExceeded` 超时错误后会自动切换到下一个服务。同时还提供切换服务后，自动恢复原服务功能。
+
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+	"sync/atomic"
+	"time"
+
+	"github.com/udugong/go-comm"
+	"github.com/udugong/go-comm/failover"
+)
+
+func main() {
+	// 当切换服务后触发30分钟后把服务切换回第一个
+	setIdxFn := failover.WithSetIdxFunc[Args](func(ctx context.Context, idx *int32) {
+		timer := time.NewTimer(30 * time.Minute)
+		defer timer.Stop()
+		select {
+		case <-ctx.Done():
+			return
+		case <-timer.C:
+			atomic.StoreInt32(idx, 0)
+		}
+	})
+	// 创建一个连续3次超时就切换到下一个服务的发送服务。并设置定时恢复原服务。
+	sender := failover.NewTimeoutService[Args]([]comm.Sender[Args]{&testService[Args]{}}, 3, setIdxFn)
+
+	err := sender.Send(context.Background(), "", Args{}, "")
+	if err != nil {
+		// 只有非  context.DeadlineExceeded 的错误才会返回
+		fmt.Println(err)
+	}
+}
+
+type Args struct {
+	From    string
+	Subject string
+	Body    string
+	IsHTML  bool
+}
+
+// testService 模拟实现 Sender[T any] 接口
+type testService[T any] struct {
+	err error
+}
+
+func (svc *testService[T]) Send(_ context.Context, _ string, _ T, _ ...string) error {
+	return svc.err
+}
+
+```
