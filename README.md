@@ -21,7 +21,7 @@ type Sender[T any] interface {
 go versions
 ==================
 
-`>=1.20`
+`>=1.21`
 
 
 
