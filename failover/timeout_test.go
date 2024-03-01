@@ -17,9 +17,9 @@ func TestTimeoutService_Send(t *testing.T) {
 		name         string
 		localSvc1Err error
 		localSvc2Err error
-		fn           func(context.Context, *int32)
+		fn           func(context.Context, *atomic.Uint32)
 		interval     time.Duration
-		wantIdx      int32
+		wantIdx      uint32
 	}
 	tests := []testCase[[]string]{
 		{
@@ -67,7 +67,7 @@ func TestTimeoutService_Send(t *testing.T) {
 				_ = svc.Send(context.Background(), "", []string{}, "")
 			}
 			<-time.After(tt.interval)
-			assert.Equal(t, tt.wantIdx, svc.idx)
+			assert.Equal(t, tt.wantIdx, svc.idx.Load())
 		})
 	}
 }
@@ -78,7 +78,7 @@ func TestTimeoutService_GetCurrentServiceIndex(t *testing.T) {
 	svc := NewTimeoutService[int]([]comm.Sender[int]{svc1, svc2}, 3)
 	type testCase[T any] struct {
 		name string
-		want int32
+		want uint32
 	}
 	tests := []testCase[int]{
 		{
@@ -88,7 +88,7 @@ func TestTimeoutService_GetCurrentServiceIndex(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			svc.idx = tt.want
+			svc.idx.Store(tt.want)
 			assert.Equal(t, tt.want, svc.GetCurrentServiceIndex())
 		})
 	}
@@ -100,19 +100,14 @@ func TestTimeoutService_SetCurrentServiceIndex(t *testing.T) {
 	svc := NewTimeoutService[int]([]comm.Sender[int]{svc1, svc2}, 3)
 	type testCase[T any] struct {
 		name string
-		idx  int32
-		want int32
+		idx  uint32
+		want uint32
 	}
 	tests := []testCase[int]{
 		{
 			name: "normal",
 			idx:  1,
 			want: 1,
-		},
-		{
-			name: "index_is_less_than_range",
-			idx:  -1,
-			want: 0,
 		},
 		{
 			name: "index_greater_than_range",
@@ -123,18 +118,18 @@ func TestTimeoutService_SetCurrentServiceIndex(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			svc.SetCurrentServiceIndex(tt.idx)
-			assert.Equal(t, tt.want, svc.idx)
+			assert.Equal(t, tt.want, svc.idx.Load())
 		})
 	}
 }
 
-func withSetIdxFunc(ctx context.Context, old *int32) {
+func withSetIdxFunc(ctx context.Context, idx *atomic.Uint32) {
 	timer := time.NewTimer(100 * time.Millisecond)
 	defer timer.Stop()
 	select {
 	case <-ctx.Done():
 		return
 	case <-timer.C:
-		atomic.StoreInt32(old, 0)
+		idx.Store(0)
 	}
 }

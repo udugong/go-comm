@@ -3,6 +3,8 @@ package failover
 import (
 	"context"
 	"errors"
+	"log/slog"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -16,7 +18,7 @@ func TestService_Send(t *testing.T) {
 		localSvc1Err error
 		localSvc2Err error
 		wantErr      error
-		wantIdx      int32
+		wantIdx      uint32
 	}
 	tests := []testCase[[]string]{
 		{
@@ -33,7 +35,7 @@ func TestService_Send(t *testing.T) {
 			localSvc1Err: errors.New("模拟svc1错误"),
 			localSvc2Err: errors.New("模拟svc2错误"),
 			wantErr:      ErrAllServiceFailed,
-			wantIdx:      0,
+			wantIdx:      2,
 		},
 		{
 			name:         "context_cancel",
@@ -56,7 +58,7 @@ func TestService_Send(t *testing.T) {
 			localSvc2.err = tt.localSvc2Err
 			err := svc.Send(context.Background(), "", []string{}, "")
 			assert.Equal(t, tt.wantErr, err)
-			assert.Equal(t, tt.wantIdx, svc.idx)
+			assert.Equal(t, tt.wantIdx, svc.idx.Load())
 		})
 	}
 }
@@ -67,7 +69,7 @@ func TestService_GetCurrentServiceIndex(t *testing.T) {
 	svc := NewService[int]([]comm.Sender[int]{svc1, svc2})
 	type testCase[T any] struct {
 		name string
-		want int32
+		want uint32
 	}
 	tests := []testCase[int]{
 		{
@@ -77,7 +79,7 @@ func TestService_GetCurrentServiceIndex(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			svc.idx = tt.want
+			svc.idx.Store(tt.want)
 			assert.Equal(t, tt.want, svc.GetCurrentServiceIndex())
 		})
 	}
@@ -89,19 +91,14 @@ func TestService_SetCurrentServiceIndex(t *testing.T) {
 	svc := NewService[int]([]comm.Sender[int]{svc1, svc2})
 	type testCase[T any] struct {
 		name string
-		idx  int32
-		want int32
+		idx  uint32
+		want uint32
 	}
 	tests := []testCase[int]{
 		{
 			name: "normal",
 			idx:  1,
 			want: 1,
-		},
-		{
-			name: "index_is_less_than_range",
-			idx:  -1,
-			want: 0,
 		},
 		{
 			name: "index_greater_than_range",
@@ -112,7 +109,35 @@ func TestService_SetCurrentServiceIndex(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			svc.SetCurrentServiceIndex(tt.idx)
-			assert.Equal(t, tt.want, svc.idx)
+			assert.Equal(t, tt.want, svc.idx.Load())
+		})
+	}
+}
+
+func TestWithLogger(t *testing.T) {
+	jsonLogger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{}))
+	textLogger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{}))
+	type testCase[T any] struct {
+		name   string
+		logger *slog.Logger
+		want   *slog.Logger
+	}
+	tests := []testCase[int]{
+		{
+			name:   "json_handler_logger",
+			logger: slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{})),
+			want:   jsonLogger,
+		},
+		{
+			name:   "text_handler_logger",
+			logger: slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{})),
+			want:   textLogger,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := NewService([]comm.Sender[int]{&testService[int]{}}, WithLogger[int](tt.logger))
+			assert.Equal(t, tt.want, svc.logger)
 		})
 	}
 }
