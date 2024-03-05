@@ -40,12 +40,12 @@ func WithLogger[T any](logger *slog.Logger) Option[T] {
 	})
 }
 
-func (s *Service[T]) Send(ctx context.Context, tpl string, args T, to ...string) error {
+func (s *Service[T]) Send(ctx context.Context, biz string, args T, to ...string) error {
 	idx := s.idx.Load()
 	length := uint32(len(s.svcs))
 	for i := idx; i < idx+length; i++ {
 		svc := s.svcs[i%length]
-		err := svc.Send(ctx, tpl, args, to...)
+		err := svc.Send(ctx, biz, args, to...)
 		if err == nil {
 			return nil
 		}

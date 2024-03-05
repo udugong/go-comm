@@ -21,10 +21,10 @@ func NewService[T any](svc comm.Sender[T], retryMax int) *Service[T] {
 	}
 }
 
-func (s *Service[T]) Send(ctx context.Context, tpl string, args T, to ...string) error {
+func (s *Service[T]) Send(ctx context.Context, biz string, args T, to ...string) error {
 	var err error
 	for i := 0; i < s.retryMax; {
-		err = s.svc.Send(ctx, tpl, args, to...)
+		err = s.svc.Send(ctx, biz, args, to...)
 		if err == nil {
 			return nil
 		}

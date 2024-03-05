@@ -26,7 +26,7 @@ func NewService[T any](svc comm.Sender[T], limitKey string, limiter Limiter) *Se
 	}
 }
 
-func (s *Service[T]) Send(ctx context.Context, tpl string, args T, to ...string) error {
+func (s *Service[T]) Send(ctx context.Context, biz string, args T, to ...string) error {
 	limited, err := s.limiter.Limit(ctx, s.limitKey)
 	if err != nil {
 		return fmt.Errorf("sender 服务判断限流器出现问题; err: %w", err)
@@ -34,5 +34,5 @@ func (s *Service[T]) Send(ctx context.Context, tpl string, args T, to ...string)
 	if limited {
 		return ErrLimited
 	}
-	return s.svc.Send(ctx, tpl, args, to...)
+	return s.svc.Send(ctx, biz, args, to...)
 }

@@ -53,7 +53,7 @@ func WithSetIdxFunc[T any](fn func(context.Context, *atomic.Uint32)) TimeoutOpti
 	})
 }
 
-func (t *TimeoutService[T]) Send(ctx context.Context, tpl string, args T, to ...string) error {
+func (t *TimeoutService[T]) Send(ctx context.Context, biz string, args T, to ...string) error {
 	cnt := t.cnt.Load()
 	idx := t.idx.Load()
 	if cnt >= t.threshold {
@@ -67,7 +67,7 @@ func (t *TimeoutService[T]) Send(ctx context.Context, tpl string, args T, to ...
 		}
 	}
 	svc := t.svcs[idx]
-	err := svc.Send(ctx, tpl, args, to...)
+	err := svc.Send(ctx, biz, args, to...)
 	switch {
 	case err == nil:
 		// 重新累计连续的超时次数

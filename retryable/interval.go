@@ -25,12 +25,12 @@ func NewIntervalService[T any](svc comm.Sender[T], retryMax int, intervalFn func
 	}
 }
 
-func (s *IntervalService[T]) Send(ctx context.Context, tpl string, args T, to ...string) error {
+func (s *IntervalService[T]) Send(ctx context.Context, biz string, args T, to ...string) error {
 	var err error
 	timer := time.NewTimer(s.intervalFunc())
 	defer timer.Stop()
 	for i := 0; i < s.retryMax; {
-		err = s.svc.Send(ctx, tpl, args, to...)
+		err = s.svc.Send(ctx, biz, args, to...)
 		if err == nil {
 			return nil
 		}
